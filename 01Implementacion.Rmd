@@ -1,0 +1,937 @@
+---
+title: "PEC"
+author: "Gabriel Granda"
+date: "2024-04-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+```
+
+# Descripción del conjunto de datos
+
+```{r, warning=FALSE, message=FALSE}
+# Librerías: 
+
+library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(DT)
+library(corrplot)
+library(caret)
+library(fastDummies)
+library(SHAPforxgboost)
+# Datos: 
+
+insurance_claims <- read_csv("datos/insurance_claims.csv")
+
+insurance_claims %>% nrow()
+insurance_claims %>% ncol()
+```
+
+El conjunto de datos contiene 1000 registros y 40 variables sobre reclamos de seguros de automóviles, cada fila corresponde a un reclamo y las columnas a las características asociadas a este reclamo.
+
+La variable principal es **fraud_reported**, que indica la legitimidad del reclamo. Corresponde a una variable binaria que indica si se ha reportado o no un fraude en relación con un reclamo de seguro de automóvil.
+
+Se cuenta con las siguientes variables:
+
+1.  months_as_customer: Es una variable numérica que indica el número de meses que tiene el asegurador como cliente.
+
+2.   age: Variable numérica que indica la edad del cliente.
+
+3.  policy_number: Número de poliza.
+
+4.  policy_bind_date: Fecha de vinculación de la poliza.
+
+5.  policy_state: Estado en el que se emitió la poliza, toma los valores IL (Illinois), IN (Indiana), OH (Ohio).
+
+6.  policy_csl: Variable categórica, indica los límites de responsabilidad civil de una póliza de seguro de automóvil, se tienen las siguientes categorías 100/300, 250/500, 500/1000. Por ejemplo, la categoría 100/300 establece un límite de \$100,000 para lesiones corporales por persona y \$300,000 en total por accidente.
+
+7.  policy_deductable: Variable numérica, corresponde a la cantidad de dinero que el asegurado debe pagar de su propio bolsillo antes de que la compañía de seguros comience a cubrir los costos de un reclamo.
+
+8.  policy_annual_premium: Variable numérica, prima anual de la póliza de seguro. La prima es el monto de dinero que el asegurado paga a la compañía de seguros a cambio de la cobertura proporcionada por la póliza durante un período específico, que generalmente es de un año.
+
+9.   umbrella_limit: Variable numérica, corresponde al límite de la poliza de seguro de responsabilidad civil adicional que proporciona una protección extra de los límites estándar de la póliza.
+
+10. insured_zip: Código Postal del asegurado.
+
+11. insured_sex: Sexo del asegurado, toma los valores FEMALE, MALE.
+
+12. insured_education_level: Variable categórica, nivel de educación del asegurado. Se tienen los siguientes niveles: Associate, College High School, JD, Masters, MD, PhD.
+
+13. insured_occupation: Ocupación del asegurado, toma 14 valores distintos, por ejemplo, adm-clerical, armed-forces, craft-repair.
+
+14. insured_hobbies: Pasatiempos del asegurado, toma 20 valores distintos, por ejemplo, base-jumping, basketball, board-game.
+
+15. insured_relationship: Estado civil del asegurado, toma los valores: husband, not-in-family other-relative, own-child, unmarried, wife.
+
+16. capital-gains: Ganancias del capital.
+
+17. capital-loss: Pérdidas del capital.
+
+    Las variables relativas al incidente son:
+
+18. incident_date: Fecha en que ocurrió el incidente.
+
+19. incident_type: Variable categórica que indica el tipo de incidente ocurrido, toma los valores: Multi-vehicle Collision, Parked Car Single Vehicle Collision, Vehicle Theft.
+
+20. collision_type: Tipo de colisión que ocurrió en el accidente, toma los valores de "?", Front Collision , Rear Collision, Side Collision. Notemos que se tiene el símbolo "?" posiblemente para denotar falta de información.
+
+21. incident_severity: Variable categórica que indica el nivel de gravedad del incidente. Tiene las siguientes categorías Major Damage, Minor Damage, Total Loss, Trivial Damage.
+
+22. authorities_contacted: Variable categórica que identifica el tipo de autoridad contactada. Por ejemplo, Ambulance, Fire, None, Other, Police.
+
+23. incident_state: Estado donde ocurrió el accidente: NC, NY, OH, PA, SC, VA y WV.
+
+24. incident_city: Ciudad donde ocurrió el incidente. Por ejemeplo, Arlington, Columbus, Hillsdale, Northbend, Northbrook, Riverwood, Springfield.
+
+25. incident_location: Ubicación donde ocurrió el incidente o el accidente, se tienen 1000 valores distintos.
+
+26. incident_hour_of_the_day: Variable numérica discreta que indica la hora del día en que ocurrió el incidente o el accidente.
+
+27. number_of_vehicles_involved: Variable numérica discreta que indica el número de vehículos involucrados en el incidente o el accidente.
+
+28. property_damage: Variable binaria que indica si existen daños o no a la propiedad externa como resultado del incidente o accidente.
+
+29. bodily_injuries: Número total de lesiones reportadas como resultado del incidente o accidente de tránsito.
+
+30. witnesses: Indica el número total de testigos presentes en el lugar del incidente o accidente.
+
+31. police_report_available: Variable categórica que indica si existe o no un informe policial sobre el incidente o accidente.
+
+32. total_claim_amount: Monto total reclamado por el asegurador como resultado del incidente o accidente.
+
+33. injury_claim: Monto reclamado por lesiones como resultado del incidente o accidente.
+
+34. property_claim: Monto reclamado por daños a la propiedad como resultado del incidente o accidente.
+
+35. vehicle_claim: Monto reclamado específicamente por los daños al vehículo asegurado como resultado del accidente.
+
+36. auto_make: Marca del Auto, se tiene 14 marcas distintas.
+
+37.  auto_model: Modelo del auto, se cuentan con 39 modelos distintos.
+
+38. auto_year: Anio del vehículo.
+
+39. fraud_reported: Variable binaria que indica si se ha reportado o no un fraude en relación con un reclamo de seguro de automóvil.
+
+40. c_39: Variable que posee todos los valores en blanco.
+
+# Análisis estadístico
+
+Previo a realizar el análisis estadístico del conjunto de datos vamos a descartar las siguientes variables:
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% dplyr::select(-policy_number, -insured_zip,
+                                                      -incident_location, -`_c39`)
+```
+
+## Variable objetivo
+
+Ahora, vamos a estudiar la variable a modelar. 
+
+```{r, warning=FALSE, message=FALSE}
+
+ggplot(insurance_claims, aes(x = fraud_reported, fill = fraud_reported)) +
+  geom_bar() +
+  stat_count(geom = "text",
+             aes(label = after_stat(count)), 
+             vjust = -.5)+
+  labs(title = "Distribución de la variable Fraud Reported", x = "Fraud Reported", y = "Frecuencia") +
+  theme_light()
+
+```
+
+```{r}
+100*prop.table(table(insurance_claims$fraud_reported)) 
+```
+De este modo, el 75.3% de los reclamos que se han reportado no corresponden a un fraude, mientras que el 24.7% si lo son. Por lo tanto, nuestra variable no está desbalanceada y podemos emplearla para desarrollar el modelo. 
+
+## Variables descriptoras
+
+En primer lugar, vamos a determinar si existen valores perdidos: 
+
+```{r, warning=FALSE, message=FALSE}
+colSums(is.na(insurance_claims))
+```
+
+De este modo, a priori, podemos ver que no existen valores perdidos, no obstante, para variables categóricas vamos a determinar los niveles de cada variable y la distribución de frecuencias. Mientras que para las variables numéricas vamos a calcular los estadísticos descriptivos y valores atípicos. 
+
+## Variables numéricas
+
+```{r, warning=FALSE, message=FALSE}
+variables_numericas <- select_if(insurance_claims, is.numeric) %>% 
+                       gather(key = "Variable", value = "Valor")
+
+estadisticos<- variables_numericas %>% group_by(Variable) %>% 
+                                       summarise(Promedio = round(mean(Valor), 2), 
+                                                 Desv = round(sqrt(var(Valor)), 2),
+                                                 Mediana = round(median(Valor), 2), 
+                                                 Min = min(Valor), 
+                                                 Max = max(Valor)
+                                                 )
+
+estadisticos
+```
+
+Vamos a complementar el estudio presentando la densidad de las variables:
+
+```{r, warning=FALSE, message=FALSE, fig.width=20, fig.height= 20}
+
+p1<- variables_numericas %>%  ggplot(aes(x = Valor)) +
+geom_density(fill = "skyblue", alpha = 0.7) +
+facet_wrap(~ Variable, nrow = 4, ncol = 4, scales = "free") +
+labs(title = "Distribución de Variables Numéricas",
+     x = "Valor",
+     y = "Densidad")
+p1
+```
+
+
+Para determinar los valores atípicos vamos a presentar los diagramas de cajas: 
+
+```{r, warning=FALSE, message=FALSE, fig.width= 20, fig.height=20}
+
+
+variables_numericas <- select_if(insurance_claims, is.numeric) %>% 
+                       select(months_as_customer, policy_annual_premium,umbrella_limit, 
+                              number_of_vehicles_involved, bodily_injuries, witnesses, total_claim_amount,
+                              injury_claim, property_claim, vehicle_claim
+                              ) %>% 
+                       gather(key = "Variable", value = "Valor")
+
+p2<- variables_numericas %>% ggplot(aes(x = Variable, y = Valor)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  facet_wrap(~ Variable, nrow = 4, ncol = 4, scales = "free") +
+  labs(title = "Diagrama de Cajas de Variables Numéricas",
+       x = "Variable",
+       y = "Valor")
+p2
+```
+
+
+Así, podemos notar que existen valores atípicos para las variables: 
+
+- age, 
+- policy_annual_premium,
+- property_claim,
+- total_claim_amount,
+- umbrela_limit.
+
+### Interpretación
+
+- **Edad (age)**: Se tiene un promedio de 39 años y una desviación estándar relativamente baja (9.14 años). Además, el $50\%$ de los asegurados tiene hasta 38 años. La edad mínima es 19 y la edad máxima 64 años. Con respecto a los valores atípicos, no aplicaremos ningún método pues es razonable tener una edad máxima de 64 años. 
+
+- **Año del automovil (auto_year)**: La antiguedad de los vehículos varían desde el año 1995 hasta el 2015. El promedio y la mediana toman valores cercanos, por lo que, la distrbución es relativamente uniforme, lo cual se justifica observado la gráfica de la densidad de la función. Además, no existen valores atípicos. 
+
+- **Lesiones corporales (bodily_injuries)**: El valor mínimo es cero y el valor máximo es 2, dado que la mediana es 1, esto implica que el 50% de las reclamaciones implica al menos una lesión corporal. 
+
+- **Ganancias de capital (capital-gains)**: Se tiene un promedio de $25126$ y una desviación estándar de $27872$, por lo que, existe una variabilidad considerable. Además, dado que la mediana es cero, esto implica que el 50% de las reclamaciones no implican ganancia del capital. 
+
+- **Pérdidas de capital (capital-loss)** Tenemos un promedio de $-26,794$ y una desviación estándar de $28,104$. También, dado que la mediana es $-23250$ podemos asegurar que el 50% de las reclamaciones experimentaron pérdidas del capital con una variabilidad significativa, al tener un valor considerable para la desviación estándar. 
+
+- **Hora del incidente del día (incident_hour_of_the_day)**: Se tiene un rango de 0 a 23 horas. Además, la mediana y el promedio es 12 horas, con que junto con la densidad de la variable, podemos notar que la variable es relativamente uniforme. 
+
+- **Reclamo por lesiones (injury_claim)**: El promedio de reclamos es $7433$ con una desviación estándar de $4881$, lo cual sugiere una variabilidad significativa.No se observan valores atípicos. 
+
+- **Meses como cliente (months_as_customer)**: El rango es de 0 a 479 meses. Además, los asegurados han sido clientes de la empresa en promedio 204 meses. 
+
+- **Número de vehículos involucrados (number_of_vehicles_involved)**: El número mínimo de vehículos involucrados es 4 y el máximo es 6. La mediana es 1, lo cual implica en en la mayoría de los accidentes ha estado involucrado solamente un vehículo. 
+
+- **Prima anual de la póliza (policy_annual_premium)**: La prima anual más económica es de $433$ doláres, por otro lado, la más costosa es de $2048$ dólares. El promedio es $\$1256$ y la mediana $\$1257$, por lo que, junto con la gráfica de la distribución podemos conjetura que se distribuye normalmente. Para esta variable, en el diagrama de cajas podemos notar valores atípicos, no obstante al analizar los valores mínimo y máximo podemos notar que estos valores son aceptables, por lo que, no realizaremos ningún tratamiento.  
+
+
+
+- **Deducible de la póliza (policy_deductable)**: El valor deducible mínimo que un asegurado debe pagar es $\$500$, mientras que es máximo es $\$2000$. El promedio es $\$1136$, con una variabilidad significativa entre las pólizas en términos de deducibles (debido a que la desviación estándar es $\$612$). 
+
+
+El resto de variables se interpretan análogamente, nos vamos a centrar en el estudio de la variable **umbrella_limit**, pues se evidencian valores atípicos en el diagrama de cajas. El valor máximo de esta variable es $10000000$ y el valor mínimo es $-1000000$, además es el único valor negativo. El valor máximo no lo vamos a considerar como atípico, pues esta cobertura adicional es solicitada por personas con un alto patrimonio neto que poseen muchos activos o activos muy costosos. El valor negativo no es correcto, pues por definición esta cobertura no puede ser negativa, así, supondremos que este valor corresponde a un error, y lo vamos a considerar como positivo. 
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% mutate(umbrella_limit = ifelse(umbrella_limit < 0, -1*umbrella_limit, umbrella_limit))
+```
+
+
+
+Finalmente, vamos a crear una variable considerando incident_date y policy_bind_date: 
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% 
+                   mutate(num_anios = year(incident_date) - year(policy_bind_date)) %>% 
+                   select(-incident_date, -policy_bind_date)
+```
+
+Esta variable indicará el número de años trascurridos desde que se contrató la poliza y se realizó la reclamación. 
+
+Presentamos los estadísticos descriptivos de esta variable: 
+
+```{r, warning=FALSE, message=FALSE}
+summary(insurance_claims$num_anios)
+```
+
+```{r, warning=FALSE, message=FALSE}
+ggplot(insurance_claims, aes(x = num_anios)) +
+geom_density(fill = "skyblue", alpha = 0.7) +
+labs(title = "Años transcurridos",
+     x = "Valor",
+     y = "Densidad")
+```
+
+El rango es de 0 a 25 años, lo cual implica que existen asegurados que utilizaron el seguro el mismo año, por otro lado, se tiene asegurados que han empleado el seguro tras $25$ años. La media es $13.6$ y la mediana $13$, así, junto con la gráfica de densidad podemos ver que la variable tiene una distribución relativamente uniforme. 
+
+
+
+
+Finalmente, vamos a presentar las correlaciones de las variables numéricas: 
+
+
+```{r, warning=FALSE, message=FALSE}
+correlation_matrix<- cor(insurance_claims %>% select_if(is.numeric))
+corrplot(correlation_matrix, method = "color", type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+```
+
+
+
+- Observamos una correlación alta entre las variables age y month age ($0.92$), algo lógico, pues a medida que aumenta la edad del asegurado también lo hará su tiempo como cliente. 
+
+- Además, la variable total_claim_amount posee un valor de correlación alto con respecto a las variables vehicle_claim, property_claim y injury_claim, siendo de $0.9827, 0.8107$ y $0.8050$, respectivamente. Esto se da, debido a que 
+
+$$total\_claim\_amount = vehicle\_claim + property\_claim + injury\_claim. $$
+Por ello, vamos a descartar a la variable total_claim_amount. 
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% select(-total_claim_amount)
+```
+
+## Variables categóricas: 
+
+Calculemos el número de categorías distintas de cada variable:
+
+```{r, warning=FALSE, message=FALSE}
+variables_categoricas <- select_if(insurance_claims, is.character) %>% 
+                         gather(key = "Variable", value = "Categoria")
+
+
+num_categorias_por_variable <- sapply(select_if(insurance_claims, is.character), function(x) length(unique(x)))
+
+num_categorias_por_variable
+```
+
+Las variables insured_occupation, insured_hobbie, auto_make y auto_model tienen varias categorías.
+
+Presentemos la distribución de frecuencias de las variables que poseen hasta 5 categorías: 
+
+
+```{r, warning=FALSE, message=FALSE, fig.height=20, fig.width=20}
+
+variables<- names(num_categorias_por_variable[num_categorias_por_variable<6])
+
+frecuencia_categorias <- count(variables_categoricas, Variable, Categoria)
+
+p3<- frecuencia_categorias %>% 
+filter(Variable %in% variables) %>% 
+ggplot(aes(x = Categoria, y = n)) +
+geom_bar(stat = "identity", fill = "skyblue") +
+facet_wrap(~ Variable, nrow = 4, ncol = 4, scales = "free")  +
+labs(title = "Frecuencia de Categorias",
+     x = "Categoria",
+     y = "Frecuencia")
+p3
+```
+
+
+Podemos ver que para las variables collision_type, property_damage y police_report_available tenemos la categoría "?" que es un indicador de un valor perdido.
+
+Vamos a reemplazar el valor de "?" por NoDefinido: 
+
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% mutate(
+    collision_type = ifelse(collision_type == "?", "NoDefinido", collision_type), 
+    property_damage = ifelse(property_damage == "?", "NoDefinido", property_damage), 
+    police_report_available = ifelse(police_report_available == "?", "NoDefinido", police_report_available)
+)
+```
+
+También, presentamos la frecuencia relativa de cada variable:
+
+```{r, warning=FALSE, message=FALSE}
+frecuencia_categorias %>% left_join(frecuencia_categorias %>% 
+                                      group_by(Variable) %>% 
+                                      summarise(total = sum(n)), 
+                                    by = c("Variable")) %>% 
+                          mutate(FreqRelativa = round(100*n/total,2) ) %>% 
+                          DT::datatable()
+```
+
+Recategoricemos la variable authorities_contacted, de la siguiente forma: 
+
+$$ authorities\_contacted = \begin{cases} 1 \quad\text{si}\quad authorities\_contacted \in\{\text{Fire, Ambulance, Other, Police}\} \\ 0 \quad \text{si}\quad authorities\_contacted = None \end{cases}  $$
+
+Es decir, authorities_contacted indicará si se contactó a una autoridad o no. 
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% mutate(authorities_contacted = 
+                                                 ifelse(authorities_contacted == "None", "No","Si"))
+```
+
+Además, vamos a descartar las variables insured_occupation, insured_hobbies, incident_state, incident_city, auto_make y auto_model que poseen categorías con una frecuencia menor al $5\%$. 
+
+```{r, warning=FALSE, message=FALSE}
+insurance_claims<- insurance_claims %>% select(-insured_occupation, -insured_hobbies, 
+                                               -incident_state, -incident_city, 
+                                               -auto_make, -auto_model) 
+```
+
+
+
+Nos interesa describir la relación entre el fraude y cada una de las variables mencionadas anteriormente. Para ello, por un lado graficaremos mediante diagramas de barras la cantidad de reclamaciones fraudulentas y no, según el tipo de cada variable.
+
+### fraud_reported vs policy_state
+
+```{r, warning=FALSE, message=FALSE}
+plotby1<-ggplot(insurance_claims, aes(policy_state,fill=fraud_reported))+geom_bar() +labs(x="policy_state", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby1
+```
+
+```{r, warning=FALSE, message=FALSE}
+prop.table(table(insurance_claims$policy_state, insurance_claims$fraud_reported), margin = 1)
+```
+Podemos ver que la proporción de reclamaciones no fraudulentas es similar en cada estado. El $77.22%, 74.52%$ y el $74.15%$  de las polizas emitidas en IL, IN y OH, respectivamente, no resultaron en una reclamación de fraude. 
+
+### fraud_reported vs policy_csl
+
+```{r, warning=FALSE, message=FALSE}
+plotby2<-ggplot(insurance_claims, aes(policy_csl,fill=fraud_reported))+geom_bar() +labs(x="policy_csl", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby2
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$policy_csl, insurance_claims$fraud_reported), margin = 1)
+```
+
+Podemos ver que la en cada categoría existe mayor proporción de reclamos no fraudulentos. Resaltamos que para el límite 500/1000 el 78.33% de los reclamos no han incurrido en fraude.  
+
+### fraud_reported vs insured_sex
+
+
+```{r, warning=FALSE, message=FALSE}
+plotby3<-ggplot(insurance_claims, aes(insured_sex,fill=fraud_reported))+geom_bar() +labs(x="insured_sex", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Sexo")
+
+plotby3
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$insured_sex, insurance_claims$fraud_reported), margin = 1)
+```
+
+El $76.54%$ de los reclamos de asegurados del sexo masculino han sido legítimos, análogamente, para el $73.87%$ de las aseguradas del sexo femenino. 
+
+### fraud_reported vs insured_education_level
+
+```{r, warning=FALSE, message=FALSE}
+
+plotby4<-ggplot(insurance_claims, aes(insured_education_level,fill=fraud_reported))+geom_bar() +labs(x="insured_education_level", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Nivel de Educación")
+
+plotby4
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$insured_education_level, insurance_claims$fraud_reported), margin = 1)
+```
+
+La tasa de fraude es menor en todas las categorías de nivel de educación del asegurado. El $77.5%$ de los asegurados que han aprobado **High School** han realizado reclamaciones legítimas.
+
+
+### fraud_reported vs insured_relationship
+
+```{r, warning=FALSE, message=FALSE}
+plotby4<-ggplot(insurance_claims, aes(insured_relationship,fill=fraud_reported))+geom_bar() +labs(x="insured_relationship", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby4
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$insured_relationship, insurance_claims$fraud_reported), margin = 1)
+```
+
+El $79.41%$ de los asegurados casados presentaron un reclamo legítimo. Mientras que el $70.62%$ de los asegurados con otro tipo de relación realizaron un reclamo legítimo. 
+
+
+### fraud_reported vs incident_type
+
+```{r, warning=FALSE, message=FALSE}
+plotby5<-ggplot(insurance_claims, aes(incident_type,fill=fraud_reported))+geom_bar() +labs(x="incident_type", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby5
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$incident_type, insurance_claims$fraud_reported), margin = 1)
+```
+Si el incidente ocurrió cuando el vehículo estaba parqueado o robado, la tasa de fraude es baja. Por ejemplo, el $91.49%$ de las reclamaciones reportadas cuando robaron el vehículo fueron legítimas, análogamente para el $90.48%$ de reclamaciones reportadas cuando el vehículo estaba parqueado.
+
+### fraud_reported vs collision_type
+
+```{r, warning=FALSE, message=FALSE}
+plotby6<-ggplot(insurance_claims, aes(collision_type,fill=fraud_reported))+geom_bar() +labs(x="collision_type", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby6
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$collision_type, insurance_claims$fraud_reported), margin = 1)
+```
+Si no existe una colisión, entonces la proporción de reclamos no fraudelentos es alta.
+
+Además, notemos que **NoDefinido** se presenta cuando el accidendet fue **Parked Car** o **Vehicle Theft**.  
+
+### fraud_reported vs incident_severity
+
+```{r, warning=FALSE, message=FALSE}
+plotby7<-ggplot(insurance_claims, aes(incident_severity,fill=fraud_reported))+geom_bar() +labs(x="incident_severity", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby7
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$incident_severity, insurance_claims$fraud_reported), margin = 1)
+```
+Cuando el accidente fue con daños mayores, entonces el $60.51\%$ de los reclamos fueron fraudeulentos. Para el resto de categorías se mantienen proporciones altas para reclamaciones legítimas.
+
+### fraud_reported vs authorities_contacted
+
+```{r, warning=FALSE, message=FALSE}
+plotby8<-ggplot(insurance_claims, aes(authorities_contacted,fill=fraud_reported))+geom_bar() +labs(x="authorities_contacted", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Autoridad Contactada")
+
+plotby8
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$authorities_contacted, insurance_claims$fraud_reported), margin = 1)
+```
+La tasa de fraude aumenta cuando se contacta con una autoridad. En el $93.41\%$ de los reclamos legítimos no se contacto con una autoridad.
+
+### fraud_reported vs property_damage
+
+
+```{r, warning=FALSE, message=FALSE}
+plotby9<-ggplot(insurance_claims, aes(property_damage,fill=fraud_reported))+geom_bar() +labs(x="property_damage", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby9
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$property_damage, insurance_claims$fraud_reported), margin = 1)
+```
+
+Cuando no existen daños a la propiedad externa como resultado del incidente o accidente, el $80.47/%$
+ de las reclamaciones son legítimas. 
+ 
+### fraud_reported vs police_report_available
+
+
+
+```{r, warning=FALSE, message=FALSE}
+plotby10<-ggplot(insurance_claims, aes(police_report_available,fill=fraud_reported))+geom_bar() +labs(x="police_report_available", y="fraud_reported")+ guides(fill=guide_legend(title="")) + ggtitle("Fraude por Estado")
+
+plotby10
+```
+
+```{r, warning=FALSE,  message=FALSE}
+prop.table(table(insurance_claims$police_report_available, insurance_claims$fraud_reported), margin = 1)
+```
+La tasa de fraude es similar en todas las categorías.  Por ejemplo, el $77.07%$ de los reclamos con informe policial sobre el incidente son legítimos. 
+
+
+# Selección de variables
+
+## Variables categóricas
+
+Con la intención de seleccionar aquellas variables categóricas que permitan describir de mejor manera los reclamos legítimos y los fraudulentos, vamos a emplear pruebas estadísticas que nos permitan analizar la capacidad predictiva de las mismas. Para ello, vamos a emplear la medida del valor de la información (IV).
+
+El valor de la información (IV) es una medida de la capacidad predictiva de una variable categórica $x$  para predecir con precisión los casos positivos y los casos negativos. Según Siddiqi (2006), los valores del IV, indican lo siguiente:
+
+- Menos de 0.02, entonces el predictor no es útil para el modelo.
+- 0.02 a 0.1, entonces el predictor tiene solo una relación débil.
+- 0.1 a 0.3, entonces el predictor tiene una relación de fuerza media.
+- 0.3 o superior, entonces el predictor tiene una fuerte relación.
+- Para calcular esta medida vamos a emplear la librería Information.
+
+```{r, warning=FALSE, message=FALSE}
+library(Information)
+
+insurance_claims<- insurance_claims %>% mutate_if(is.character, as.factor)
+
+info_data<- create_infotables( insurance_claims %>% select_if(is.factor) %>% mutate(fraud_reported = ifelse( fraud_reported == "Y", 0, 1 ) ), y = "fraud_reported")
+
+print(info_data$Summary)
+```
+
+De este modo, para entrenar el modelo solamente vamos a considerar aquellas variables para las cuales $IV>0.1$, es decir, **incident_severity**, **collision_type**, **incident_type**, **authorities_contacted**.
+
+```{r, warning=FALSE, message=FALSE}
+seleccion_cat <- insurance_claims %>% select(incident_severity, collision_type,
+                                             incident_type,
+                                             authorities_contacted, 
+                                             fraud_reported)
+```
+
+
+##  Variables numéricas
+
+Para determinar las variables numéricas con mayor poder predictivo calcularemos el valor de Kolmogorov - Smirnov (KS) de las mismas con respecto a la variable **fraud_report** (variable dependiente). Así, vamos a comparar las distribuciones acumuladas empíricas del grupo de reclamos fraudulentos con el grupo de reclamos legítimos. De este modo, si su separación es mayor, entonces la distinción será mayor entre los grupos.
+
+Para ello, creamos una función que nos permita calcular el valor del KS para cada variable numérica con respecto a la variable **fraud_report** y que nos retorne el p−valor: 
+
+```{r, warning=FALSE, message=FALSE}
+
+y<- ifelse(insurance_claims$fraud_reported == "Y",0,1 )
+
+ks_test_func <- function(x) {
+  ks_result <- ks.test(x  ~  y)
+  return(ks_result$p.value)
+}
+
+
+ks_results <- sapply(insurance_claims %>% select_if(is.numeric), ks_test_func )
+
+ks_results <- data.frame( VARIABLE = names(ks_results), p_valor = ks_results, row.names = NULL)
+
+ks_results %>% arrange(p_valor)
+```
+
+Vamos a considerar solamente aquellas variables para las cuales  $p−valor<0.05$, pues esto implicaría que las distribuciones de cada variable con respecto a la variable *fraud_report* son distintas, es decir, las variables numéricas tienen poder predictivo. Por lo cual, las variables seleccionadas son:
+
+```{r, warning=FALSE,  message=FALSE}
+seleccion_num <- insurance_claims %>% select(vehicle_claim, property_claim, 
+                                             injury_claim)
+```
+
+
+### Selección del conjunto final
+
+```{r, warning=FALSE, message=FALSE}
+datos_modelo<- cbind(seleccion_num, seleccion_cat)
+names(datos_modelo)
+```
+
+
+Por lo tanto, vamos a desarrollar el modelo empleando las variables: 
+
+- vehicle_claim,
+- property_claim,
+- injury_claim,     
+- incident_severity,
+- collision_type,
+- incident_type,
+- authorities_contacted,
+- fraud_reported.
+
+# Boruta: 
+
+```{r, warning=FALSE, message=FALSE}
+library(Boruta)
+
+datos_boruta <- insurance_claims %>% mutate(fraud_reported = ifelse(fraud_reported == "Y", 1, 0)
+                                          )
+boruta <- Boruta(fraud_reported~., data = datos_boruta , doTrace = 2)
+
+print(boruta)
+```
+
+Tenemos los siguientes resultados: 
+
+```{r, warning=FALSE, message=FALSE, fig.height=5}
+p1<- plot(boruta, xlab = "", xaxt = "n")
+lz<-lapply(1:ncol(boruta$ImpHistory),function(i)
+boruta$ImpHistory[is.finite(boruta$ImpHistory[,i]),i])
+names(lz) <- colnames(boruta$ImpHistory)
+Labels <- sort(sapply(lz,median))
+axis(side = 1,las=2,labels = names(Labels),
+at = 1:ncol(boruta$ImpHistory), cex.axis = 0.8)
+```
+
+# Modelos
+
+Recordemos que la variable $fraud\_reported$ toma los valores de **N** y **Y**, así, vamos a transformarla de modo que tome los valores de 0 y 1, es decir: 
+
+$$fraud\_reported = \begin{cases} 0 \quad & \text{si el reclamo es legítimo,}  \\ 
+1 \quad & \text{en caso contrario.} \end{cases}$$
+
+```{r, warning=FALSE, message=FALSE}
+datos_modelo<- datos_modelo %>% 
+                   mutate(fraud_reported = ifelse(fraud_reported == "N", 0, 1))
+```
+
+Vamos a usar la librería *fastDummies* para transformar las variables categóricas a dummy's: 
+
+```{r, warning=FALSE, message=FALSE}
+variables_cat <- c("incident_severity", "collision_type", "incident_type", "authorities_contacted")
+
+datos_modelo_log <- dummy_cols(datos_modelo, select_columns = variables_cat, remove_selected_columns = TRUE  )
+```
+
+
+Previo a construir el modelo vamos a dividir el conjunto de datos, de modo que el 80% corresponda a la muestra de entrenamiento, y el 20% a la muestra de test 
+
+```{r, warning=FALSE, message=FALSE}
+# Fijamos el semillero: 
+set.seed(1234)
+indice <- createDataPartition(datos_modelo_log$fraud_reported, p = 0.8, list=FALSE)
+# Dividimos el conjunto:
+entrenamiento <- datos_modelo_log[indice,]
+test <- datos_modelo_log[-indice,]
+```
+
+Así, aplicamos el modelo de regresión logística: 
+
+```{r, warning=FALSE, message=FALSE}
+modelo_regresion <-glm(fraud_reported~., data = entrenamiento, family='binomial')
+summary(modelo_regresion)
+```
+Podemos ver que existen variables no significativas cuyo p-valor es mayor a 0.05, además, variables sobre las que no se ha podido calcular los coeficientes. Por ello, es necesario estimar un nuevo modelo, para ello, vamos a aplicar el método de selección Backward. 
+
+```{r, warning=FALSE, message=FALSE}
+step(modelo_regresion, direction = "backward")
+```
+De este modo, el mejor modelo tiene un valor de $AIC = 699.1$. 
+
+```{r, warning=FALSE, message=FALSE}
+modelo_fin<- glm(formula = fraud_reported ~ vehicle_claim + 
+                   `incident_severity_Major Damage` + 
+                   #`incident_severity_Minor Damage` + 
+                   `incident_severity_Total Loss` + 
+                   collision_type_NoDefinido +
+                   `collision_type_Rear Collision`, 
+    family = "binomial", data = entrenamiento)
+
+summary(modelo_fin)
+```
+
+Ahora, vamos a calcular los odd ratios: 
+
+```{r, warning=FALSE, message=FALSE}
+odds<- exp(coefficients(modelo_fin))
+odds
+```
+La interpretación es la siguiente: 
+
+- **Intercepto**: Por el signo del coeficiente podemos asegurar que existen menos reclamaciones fraudulentas que legítimas. 
+
+- **vehicle claim**: La probabilidad de que una reclamación sea fraudulenta está positivamente relacionada con el monto del reclamo. Específicamente,  el odds ratio es 1.00001310, lo cual indica que un aumento de una unidad en el monto del reclamo del vehículo se asocia con un aumento del 0.0013% en las probabilidades de que ocurra un fraude, cuando se mantienen el resto de variables constantes.
+
+- **incident_severity:** En este caso, consideramos *Trivial Damage* y **Minor Damage** como categoría de referencia. De este modo, dado que el odds ratio de *incident_severity_Major Damage* es $13.25$, esto implica que, en comparación con los casos donde el incidente resultó en daños triviales o menores, los casos donde el incidente resultó en daños importantes tienen aproximadamente 13 veces mayores probabilidades de estar asociadas con un fraude, manteniendo todas las demás variables constantes.
+
+Finalmente, para *incident_severity_Total Loss:* el odds ratio es $1.37$, lo cual establece que, en comparación con los casos donde el incidente resultó en daños triviales o menores, los casos donde el incidente resultó en pérdida total tienen aproximadamente 1.37 veces mayores probabilidades de estar asociadas con un reclamo fraudulento, cuando se mantiene el resto de variables constantes.
+
+
+- **collision_type**: 
+
+Para la variable *collision_type_NoDefinido* el odds ratioes $1.42$, esto significa que, en comparación con los casos donde el tipo de colisión es "Front Collision" o "Side Collision " , los casos donde el tipo de colisión es "NoDefinido" tienen aproximadamente $1.42$ veces más probabilidades de estar asociados con un fraude, manteniendo todas las demás variables constantes.
+
+Para  *collision_type_Rear Collision* el odss ratio  es $1.72$, lo cual implica que, en comparación con los casos donde el tipo de colisión es "Front Collision" o "Side Collision", los casos donde el tipo de colisión es "Rear Collision" tienen aproximadamente 1.72 veces más probabilidades de estar asociados con un fraude, manteniendo todas las demás variables constantes.
+
+### Bondad de ajuste: 
+
+Utilizaremos el test de Hosmer Lemeshow para determinar la bondad de ajuste del modelo, es decir, para evaluar si el modelo se ajusta bien a los datos. 
+
+```{r, warning=FALSE, message=FALSE}
+
+library(ResourceSelection)
+
+hoslem.test(entrenamiento$fraud_reported,fitted.values(modelo_fin))
+
+```
+De este modo, dado que $p-valor = 0.2609 > 0.05$, no rechazamos la hipótesis nula. Esto quiere decir que, existe evidencia estadística para afirmar que el modelo tiene un ajuste aceptable a los datos. 
+
+Ahora, vamos a estudiar la presencia de multicolinealidad entre las variables predictoras, para ello, vamos a calcular el Factor de la Varianza: 
+
+```{r, warning=FALSE, message=FALSE}
+car::vif(modelo_fin)
+```
+
+Podemos notar que obtenenos valores bajos para el VIF, por lo cual la mayoría de las variables son independientes o tienen una baja correlación entre sí (collision_type_NoDefinido  ), por lo que los coeficientes estimandos en la regresión son correctos. 
+
+
+Para determinar el punto de corte y clasificar a las reclamaciones vamos a determinar la medida  de Kolmogorov - Smirnov, de este, modo presentamos el gráfico de las distribuciones acumuladas de la razón de verdaderos positivos y la distribución de falsos positivos. 
+
+```{r, warning=FALSE, message=FALSE}
+library(ROCit) 
+
+dres <-data.frame(pred=predict(modelo_fin, entrenamiento, type="response"), var=entrenamiento$fraud_reported)
+
+ROC <-rocit(score=dres$pred ,class=dres$var)
+
+ksplot <-ksplot(ROC)
+
+cutoff <-ksplot$'KS Cutoff'
+
+kstat <-as.numeric(ksplot$'KS stat')
+```
+
+
+Obtenemos un valor de $KS = 0.5398$, el cual se alcanza en $c = 0.1744$, el cual será nuestro punto de corte para clasificar entre reclamos fraudulentos y legítimos. 
+
+
+Vamos a calcular la matriz de confusión: 
+
+```{r, warning=FALSE, message=FALSE}
+predicciones <- predict(modelo_fin, newdata = entrenamiento, type = "response")
+
+# Convertir las predicciones a clases (0 o 1)
+predicciones_clases <- ifelse(predicciones > cutoff, 1, 0)
+
+matriz_confusion <- confusionMatrix(table(predicciones_clases, entrenamiento$fraud_reported))
+print(matriz_confusion)
+```
+- La exactitud del modelo es del 78%, lo que significa que el 78% de las predicciones del modelo son correctas.
+- La sensibilidad del modelo es del 79.24%, lo que indica la proporción de casos positivos que el modelo predijo correctamente.
+- La especificidad del modelo es del 74.24%, lo que indica la proporción de casos negativos que el modelo predijo correctamente.
+
+Ahora, vamos a determinar la matriz de confusión para la muestra de test: 
+
+```{r, warning=FALSE, message=FALSE}
+predicciones <- predict(modelo_fin, newdata = test, type = "response")
+
+# Convertir las predicciones a clases (0 o 1)
+predicciones_clases <- ifelse(predicciones > cutoff, 1, 0)
+
+matriz_confusion <- confusionMatrix(table(predicciones_clases, test$fraud_reported))
+print(matriz_confusion)
+```
+- La exactitud del modelo en el conjunto de datos de prueba es del 76.5%, lo que significa que el 76.5% de las predicciones del modelo son correctas.
+- La sensibilidad del modelo es del 78.8%, lo que indica la proporción de casos positivos que el modelo predijo correctamente en el conjunto de prueba.
+- La especificidad del modelo es del 69.4%, lo que indica la proporción de casos negativos que el modelo predijo correctamente en el conjunto de prueba.
+
+
+Así, comparando los valores de exactitud, sensibilidad y especificidad en la muestra de entrenamiento y validación, podemos determinar que el modelo generaliza a datos no vistos, es decir, no se evidencia un sobreajuste. 
+
+## Random Forest
+
+
+
+```{r, warning=FALSE, message=FALSE}
+library(randomForest)
+
+set.seed(1234)
+
+datos_modelo<- datos_modelo %>% mutate(fraud_reported = as.factor(fraud_reported))
+
+indice <- createDataPartition(datos_modelo$fraud_reported, p = 0.8, list=FALSE)
+# Dividimos el conjunto:
+entrenamiento <- datos_modelo[indice,]
+test <- datos_modelo[-indice,]
+```
+
+
+Entrenamos el modelo: 
+
+```{r, warning=FALSE, message=FALSE}
+rf<- randomForest(fraud_reported ~ ., data = entrenamiento, ntree = 50)
+rf
+```
+
+Matriz de confusión para entrenamiento: 
+
+```{r, warning=FALSE, message=FALSE}
+predicciones_entrenamiento <- predict(rf, newdata = entrenamiento)
+
+# Crear la matriz de confusión
+matriz_confusion <- confusionMatrix(table(predicciones_entrenamiento,entrenamiento$fraud_reported))
+print(matriz_confusion)
+```
+
+Matriz de confusión para test: 
+
+```{r, warning=FALSE, message=FALSE}
+predicciones_test <- predict(rf, newdata = test)
+
+# Crear la matriz de confusión
+matriz_confusion <- confusionMatrix(table(predicciones_test,test$fraud_reported))
+print(matriz_confusion)
+```
+
+En este caso, podemos ver que el modelo sufre de overfitting pues para entrenamiento se tiene una exactitud de $0.9263$, mientras que para validación se tiene una exactitud de $0.6734$.
+
+Así, vamos a determinar los hiperparámetros óptimos para el Random Forest y el resto de modelos en el script posterior. 
+
+# Optimización de hiperparámetros
+
+La optimización de hiperparámetros se realizó en Kaggle para aprovechar los procesadores GPU en el proceso de entrenamiento de los modelos. El código se encuentra en el script **02Hiperparametros.html**. 
+
+
+# Interpretación
+
+El modelo empleado es el XGBoost, así, vamos a determinar los shap values: 
+
+```{r cars}
+
+datosmodelo <- read_excel("datos/datosmodelo.xlsx")
+datosmodelo<- datosmodelo %>% mutate(fraud_reported = as.factor(fraud_reported))
+
+variables_cat <- c("incident_severity", "collision_type", "incident_type", "authorities_contacted")
+
+datosmodelo <- dummy_cols(datosmodelo, select_columns = variables_cat, remove_selected_columns = TRUE  )
+
+set.seed(1234)
+indice <- createDataPartition(datosmodelo$fraud_reported, p = 0.8, list=FALSE)
+entrenamiento <- datosmodelo[indice,]
+test <- datosmodelo[-indice,]
+
+X1 <- as.matrix(entrenamiento %>% select(-fraud_reported))
+
+#Modelo final: 
+mod1<- xgboost::xgboost(
+  data = X1, label = entrenamiento$fraud_reported, gamma = 0, eta = 0.01, max_depth = 3,
+  colsample_bytree = 1, min_child_weight = 1, subsample = 1, nrounds = 100, verbose = FALSE, nthread = 1)
+
+shap_values <- shap.values(xgb_model = mod1, X_train = X1)
+
+shap_values$mean_shap_score
+
+
+shap_values_score <- shap_values$shap_score
+
+shap_long <- shap.prep(xgb_model = mod1, X_train = X1)
+shap_long <- shap.prep(shap_contrib = shap_values_score, X_train = X1)
+shap.plot.summary(shap_long)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+for (v in shap.importance(shap_long, names_only = TRUE)[1:5]) {
+  p <- shap.plot.dependence(shap_long, v, color_feature = "auto", 
+                            alpha = 0.5, jitter_width = 0.1) +
+    ggtitle(v)
+  print(p)
+}
+```
+
+Así, podemos ver que las variables más importantes son: 
+
+- $incident\_severity = Major Damage$                         
+- $property\_claim$                          
+- $vehicle\_claim$
+- $collision\_type = Side Collision$          
+- $collision\_type = Rear Collision$
+
+Para determinadas observaciones en el conjunto de datos, podemos concluir que: 
+
+- Cuando la gravedad del incidente conlleva daños mayores, la probabilidad de fraude aumenta. 
+
+- Cuando el monto reclamado por daños a la propiedad como resultado del incidente aumenta, la probabilidad de fraude disminuye.
+
+- Cuando el monto reclamado por los daños al vehículo aumenta, la probabilidad de fraude aumenta. 
+
+- Cuando el monto reclamado por lesiones como resultado del incidente o accidente aumenta, la probabilidad de fraude disminuye. 
+
+- Una colisión lateral, disminuye las probabilidades de fraude. 
+
+- Una colisión trasera o una colisión donde participa un solo vehículo aumenta las probabilidades de fraude. 
